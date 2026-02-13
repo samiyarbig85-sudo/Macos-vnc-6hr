@@ -6,7 +6,7 @@ on:
 jobs:
   macos_vnc:
     runs-on: macos-latest
-    timeout-minutes: 360  # 6 hours
+    timeout-minutes: 360  # 6 ساعت
 
     steps:
     - name: Show system info
@@ -15,37 +15,39 @@ jobs:
         uname -a
         whoami
 
-    - name: Install VNC
-      run: |
-        brew install --quiet tiger-vnc
-        mkdir -p ~/.vnc
-        echo "password" | vncpasswd -f > ~/.vnc/passwd
-        chmod 600 ~/.vnc/passwd
-
     - name: Setup Tailscale
       uses: tailscale/github-action@v3
       with:
         authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
-        # optional: tags: tag:ci
 
-    - name: Start VNC Server
+    - name: Enable macOS Native VNC (Screen Sharing)
       run: |
-        echo "#!/bin/bash" > ~/.vnc/xstartup
-        echo "unset SESSION_MANAGER" >> ~/.vnc/xstartup
-        echo "unset DBUS_SESSION_BUS_ADDRESS" >> ~/.vnc/xstartup
-        echo "exec /System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal &" >> ~/.vnc/xstartup
-        chmod +x ~/.vnc/xstartup
-        vncserver :1 -geometry 1280x800 -depth 24
+        # تنظیم پسورد برای یوزری که با آن لاگین هستیم (runner)
+        sudo dscl . -passwd /Users/runner password
+        
+        # فعال سازی Screen Sharing (VNC اصلی اپل)
+        sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+          -activate -configure -allowAccessFor -allUsers -privs -all \
+          -clientopts -setvncpassword -vncpasswd password \
+          -restart -agent -quiet
+        
+        echo "✅ Native VNC is enabled with password: password"
 
     - name: Print Connection Info
       run: |
+        # دریافت آی‌پی از Tailscale
         IP=$(tailscale ip -4)
-        echo "🔗 VNC connection info:"
-        echo "Connect to: $IP:5901"
+        echo "------------------------------------------"
+        echo "🔗 VNC Connection Details:"
+        echo "Address: $IP:5900"
+        echo "Username: runner"
         echo "Password: password"
+        echo "------------------------------------------"
+        echo "نکته: از پورت 5900 استفاده کنید (پورت پیش‌فرض مک)"
 
     - name: Keep session alive for 6 hours
       run: |
-        echo "⏳ Session started. VNC is live for 6 hours."
-        sleep 21600  # 6 hours
+        echo "⏳ Session started. macOS is live for 6 hours."
+        # حلقه برای باز نگه داشتن سشن
+        sleep 21600
         
