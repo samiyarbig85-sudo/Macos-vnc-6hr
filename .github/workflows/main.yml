@@ -1,4 +1,4 @@
-name: macOS GUI via VNC (Tailscale)
+name: macOS GUI via VNC (Safe OAuth Version)
 
 on:
   workflow_dispatch:
@@ -6,48 +6,44 @@ on:
 jobs:
   macos_vnc:
     runs-on: macos-latest
-    timeout-minutes: 360 # کل زمان اجرای ورکل‌فلو (6 ساعت)
+    timeout-minutes: 360
 
     steps:
-    - name: Show system info
-      run: |
-        sw_vers
-        uname -a
+    - name: Check System
+      run: sw_vers
 
-    - name: Setup Tailscale
+    - name: Setup Tailscale (using OAuth)
       uses: tailscale/github-action@v3
       with:
-        # حتما این سکرت را در تنظیمات گیت‌هاب تعریف کنید
-        authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+        oauth-client-id: ${{ secrets.TS_OAUTH_ID }}
+        oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+        tags: tag:ci # این تگ اختیاری است اما به مدیریت بهتر کمک می‌کند
 
-    - name: Enable macOS Native VNC (Screen Sharing)
+    - name: Enable macOS Native VNC
       run: |
-        # تعیین پسورد برای یوزر runner (برای لاگین اولیه)
+        # تنظیم پسورد یوزر سیستم
         sudo dscl . -passwd /Users/runner password
         
-        # فعال‌سازی سرویس Remote Management و تعیین پسورد VNC
+        # فعال‌سازی Screen Sharing اصلی مک
         sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
           -activate -configure -allowAccessFor -allUsers -privs -all \
           -clientopts -setvncpassword -vncpasswd password \
           -restart -agent -quiet
         
-        echo "✅ Native VNC is enabled!"
+        echo "✅ VNC setup complete."
 
     - name: Print Connection Info
       run: |
-        # استخراج آی‌پی اختصاصی این ماشین در شبکه Tailscale شما
         IP=$(tailscale ip -4)
         echo "------------------------------------------"
-        echo "🚀 CONNECT TO YOUR MAC:"
+        echo "🚀 CONNECTION DETAILS:"
         echo "Address: $IP:5900"
-        echo "Username: runner"
-        echo "Password: password"
+        echo "User: runner"
+        echo "Pass: password"
         echo "------------------------------------------"
 
-    - name: Keep session alive for 6 hours
+    - name: Keep Alive
       run: |
-        echo "⏳ Session is live. Use the IP above to connect."
-        echo "The session will automatically close after 6 hours."
-        # نگه داشتن سشن به مدت 6 ساعت
+        echo "⏳ Running... Connect now!"
         sleep 21600
         
