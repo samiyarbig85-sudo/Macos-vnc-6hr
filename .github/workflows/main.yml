@@ -1,4 +1,4 @@
-name: macOS GUI via VNC (6 Hour Session)
+name: macOS GUI via VNC (6 Hour Session) - Tailscale
 
 on:
   workflow_dispatch:
@@ -15,12 +15,18 @@ jobs:
         uname -a
         whoami
 
-    - name: Install dependencies
+    - name: Install VNC
       run: |
-        brew install --quiet tiger-vnc ngrok
+        brew install --quiet tiger-vnc
         mkdir -p ~/.vnc
         echo "password" | vncpasswd -f > ~/.vnc/passwd
         chmod 600 ~/.vnc/passwd
+
+    - name: Setup Tailscale
+      uses: tailscale/github-action@v3
+      with:
+        authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+        # optional: tags: tag:ci
 
     - name: Start VNC Server
       run: |
@@ -31,20 +37,15 @@ jobs:
         chmod +x ~/.vnc/xstartup
         vncserver :1 -geometry 1280x800 -depth 24
 
-    - name: Start ngrok tunnel
+    - name: Print Connection Info
       run: |
-        ngrok config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
-        ngrok tcp 5901 > ngrok.log &
-        sleep 10
-        cat ngrok.log
-
-    - name: Print ngrok public URL
-      run: |
-        curl -s http://127.0.0.1:4040/api/tunnels > tunnels.json
+        IP=$(tailscale ip -4)
         echo "🔗 VNC connection info:"
-        cat tunnels.json | grep -o 'tcp://[0-9a-zA-Z\.:]*'
+        echo "Connect to: $IP:5901"
+        echo "Password: password"
 
     - name: Keep session alive for 6 hours
       run: |
         echo "⏳ Session started. VNC is live for 6 hours."
         sleep 21600  # 6 hours
+        
