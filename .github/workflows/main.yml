@@ -1,49 +1,39 @@
-name: macOS GUI via VNC (Safe OAuth Version)
+name: macOS CI with Tailscale & VNC
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [ "main" ]
 
 jobs:
-  macos_vnc:
-    runs-on: macos-latest
-    timeout-minutes: 360
+  build:
+    runs-on: getmac-m4-sequoia
+
+    env:
+      TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+      VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }}
 
     steps:
-    - name: Check System
-      run: sw_vers
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Setup Tailscale (using OAuth)
-      uses: tailscale/github-action@v3
-      with:
-        oauth-client-id: ${{ secrets.TS_OAUTH_ID }}
-        oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-        tags: tag:ci # این تگ اختیاری است اما به مدیریت بهتر کمک می‌کند
+      - name: Install Tailscale
+        run: |
+          brew install --cask tailscale
+          sudo tailscale up --authkey $TAILSCALE_AUTHKEY
 
-    - name: Enable macOS Native VNC
-      run: |
-        # تنظیم پسورد یوزر سیستم
-        sudo dscl . -passwd /Users/runner password
-        
-        # فعال‌سازی Screen Sharing اصلی مک
-        sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-          -activate -configure -allowAccessFor -allUsers -privs -all \
-          -clientopts -setvncpassword -vncpasswd password \
-          -restart -agent -quiet
-        
-        echo "✅ VNC setup complete."
+      - name: Enable VNC
+        run: |
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+               -activate -configure -access -on -users $USER -privs -all -restart -agent
+          sudo defaults write /Library/Preferences/com.apple.RemoteManagement VNCAlwaysStartOnConsole -bool true
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -restart -agent
+          echo "VNC password set to $VNC_PASSWORD"
 
-    - name: Print Connection Info
-      run: |
-        IP=$(tailscale ip -4)
-        echo "------------------------------------------"
-        echo "🚀 CONNECTION DETAILS:"
-        echo "Address: $IP:5900"
-        echo "User: runner"
-        echo "Pass: password"
-        echo "------------------------------------------"
+      - name: Show Tailscale IP
+        run: tailscale ip -4
 
-    - name: Keep Alive
-      run: |
-        echo "⏳ Running... Connect now!"
-        sleep 21600
-        
+      - name: Build project
+        run: xcodebuild -scheme MyApp -workspace MyApp.xcworkspace -sdk macosx clean build
+
+      - name: Run tests
+        run: xcodebuild test -scheme MyApp -workspace MyApp.xcworkspace -destination 'platform=macOS,arch=arm64'
